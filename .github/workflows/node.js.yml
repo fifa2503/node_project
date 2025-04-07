@@ -10,43 +10,53 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [20.x]
-
     steps:
     # ขั้นตอนที่ 1: ดึงโค้ดจาก repository
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # ตรวจสอบให้ดึงประวัติทั้งหมด
+        fetch-depth: 0
 
-    # ขั้นตอนที่ 2: ตรวจสอบไฟล์ (สำหรับ debugging)
-    - name: Check repository files
+    # ขั้นตอนที่ 2: แก้ไขปัญหา path และ permission
+    - name: Setup environment
       run: |
-        echo "=== ไฟล์ในโฟลเดอร์ปัจจุบัน ==="
-        ls -la
-        echo "=== กำลังค้นหาไฟล์ lock ==="
-        find . -name "package-lock.json" -o -name "yarn.lock" -o -name "npm-shrinkwrap.json"
+        echo "Current working directory: $(pwd)"
+        echo "Contents of /home/runner/work:"
+        ls -la /home/runner/work
+        sudo chown -R runner:runner /home/runner/work
 
     # ขั้นตอนที่ 3: ติดตั้ง Node.js
-    - name: Use Node.js ${{ matrix.node-version }}
+    - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: 20.x
         cache: 'npm'
 
-    # ขั้นตอนที่ 4: ติดตั้ง dependencies
+    # ขั้นตอนที่ 4: ตรวจสอบและติดตั้ง dependencies
     - name: Install dependencies
       run: |
-        # ตรวจสอบและติดตั้งตามไฟล์ lock ที่มีอยู่
+        echo "Current directory contents:"
+        ls -la
+        
+        # แก้ไขคำสั่ง npm ที่พิมพ์ผิด (npn -> npm)
+        if ! command -v npm &> /dev/null; then
+          echo "npm not found! Checking path..."
+          which npm || echo "npm not in PATH"
+          exit 1
+        fi
+
+        # ตรวจสอบไฟล์ lock ทั้งหมด
         if [ -f package-lock.json ]; then
-          echo "พบ package-lock.json, กำลังใช้ npm ci..."
+          echo "Found package-lock.json, running npm ci..."
+          npm ci
+        elif [ -f npm-shrinkwrap.json ]; then
+          echo "Found npm-shrinkwrap.json, running npm ci..."
           npm ci
         elif [ -f yarn.lock ]; then
-          echo "พบ yarn.lock, กำลังใช้ yarn install..."
+          echo "Found yarn.lock, running yarn install..."
+          npm install -g yarn
           yarn install --frozen-lockfile
         else
-          echo "ไม่พบไฟล์ lock, กำลังใช้ npm install..."
+          echo "No lock file found, running npm install..."
           npm install
         fi
 
